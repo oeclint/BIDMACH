@@ -234,8 +234,10 @@ class AllreduceWorker(config: WorkerConfig,
   private def scatter() = {
     val numPeers = currentConfig.peerWorkers.size
     log.debug(s"scatter: numPeers = ${numPeers}")
+    val rand = new scala.util.Random(currentConfig.round)
+    val shuffled = rand.shuffle(0 to numPeers -1)
     for (peerId <- 0 until numPeers) {
-      val idx = (peerId + currentConfig.workerId) % numPeers
+      val idx = (shuffled(peerId) + currentConfig.workerId) % numPeers
       val worker = currentConfig.peerWorkers(idx)
       //Partition the dataBlock if it is too big
       val peerBlockStart = idx * getBlockSize(0, numPeers, dataSize)
@@ -263,7 +265,14 @@ class AllreduceWorker(config: WorkerConfig,
   }
 
   private def reduceAndBroadcast(chunkId: Int) = {
-    val (reducedData, reduceCount) = scatterBlockBuf.reduce(chunkId)
+    val (shuffledReducedData, reduceCount) = scatterBlockBuf.reduce(chunkId)
+    val numPeers = currentConfig.peerWorkers.size
+    val rand = new scala.util.Random(currentConfig.round)
+    val shuffled = rand.shuffle(0 to numPeers -1)
+    val reducedData = new Array[Float](shuffledReducedData.size)
+    for (i <- 0 until numPeers) {
+      reducedData(shuffled(i)) = shuffledReducedData(i)
+    }
     broadcast(reducedData, chunkId, reduceCount)
   }
 
